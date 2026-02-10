@@ -1,21 +1,17 @@
-import { getSupabaseAdmin } from "@/lib/supabase";
 import SearchClient from "./SearchClient";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
-interface AnalyzePageProps {
+interface Props {
   searchParams: Promise<{ uploadId?: string }>;
 }
 
-export default async function AnalyzePage({
-  searchParams,
-}: AnalyzePageProps) {
+export default async function AnalyzePage({ searchParams }: Props) {
   const { uploadId } = await searchParams;
 
   if (!uploadId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-100">
-        <div className="text-sm text-neutral-400">
-          Invalid access. Please upload a conversation first.
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Invalid access. Please upload a conversation first.
       </div>
     );
   }
@@ -30,24 +26,22 @@ export default async function AnalyzePage({
 
   if (!upload) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-neutral-100">
-        <div className="text-sm text-neutral-400">
-          Upload not found or expired.
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Upload not found.
       </div>
     );
   }
 
   const { data: messages } = await supabase
     .from("messages")
-    .select("*")
+    .select("id, sender, text, timestamp")
     .eq("upload_id", uploadId)
     .order("timestamp", { ascending: true });
 
   return (
     <SearchClient
       uploadId={upload.id}
-      paid={Boolean(upload.paid)}
+      paid={upload.paid}
       messages={messages || []}
     />
   );

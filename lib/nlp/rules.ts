@@ -8,6 +8,7 @@ const RULES: Record<string, string[]> = {
     "i messed up",
     "i was wrong",
   ],
+
   sad: [
     "sad",
     "hurt",
@@ -16,7 +17,10 @@ const RULES: Record<string, string[]> = {
     "tired of",
     "this hurts",
     "feels bad",
+    "stress",
+    "stressed",
   ],
+
   angry: [
     "angry",
     "furious",
@@ -25,14 +29,31 @@ const RULES: Record<string, string[]> = {
     "fed up",
     "pissed",
   ],
+
   affectionate: [
+    // explicit affection
     "love you",
     "miss you",
     "care about you",
     "thinking of you",
+
+    // reassurance & warmth
+    "always",
+    "i'm here",
+    "here for you",
+    "with you",
+
+    // gratitude (very common affectionate signal)
+    "thanks",
+    "thank you",
+    "appreciate",
+
+    // emojis (cover variants)
     "❤️",
+    "❤",
     "😘",
   ],
+
   argumentative: [
     "always",
     "never",

@@ -1,149 +1,3 @@
-// "use client";
-
-// import { useState } from "react";
-
-// interface Message {
-//   id: string;
-//   sender: string;
-//   text: string;
-//   timestamp: string;
-// }
-
-// interface Props {
-//   uploadId: string;
-//   paid: boolean;
-//   messages: Message[];
-// }
-
-// // Deterministic formatter (no locale differences)
-// function formatTimestamp(ts: string) {
-//   const d = new Date(ts);
-//   const yyyy = d.getFullYear();
-//   const mm = String(d.getMonth() + 1).padStart(2, "0");
-//   const dd = String(d.getDate()).padStart(2, "0");
-//   const hh = String(d.getHours()).padStart(2, "0");
-//   const min = String(d.getMinutes()).padStart(2, "0");
-
-//   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
-// }
-
-// export default function SearchClient({
-//   uploadId,
-//   paid,
-//   messages,
-// }: Props) {
-//   const [query, setQuery] = useState("");
-//   const [results, setResults] = useState<Message[] | null>(null);
-//   const [loading, setLoading] = useState(false);
-//   const [showPaywall, setShowPaywall] = useState(false);
-
-//   async function handleSearch() {
-//     if (!query) return;
-
-//     if (!paid) {
-//       setShowPaywall(true);
-//       return;
-//     }
-
-//     setLoading(true);
-
-//     const res = await fetch("/api/query", {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ uploadId, query }),
-//     });
-
-//     const data = await res.json();
-//     setResults(data.results || []);
-//     setLoading(false);
-//   }
-
-//   async function handleUnlock() {
-//     try {
-//       const res = await fetch("/api/stripe/checkout", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ uploadId }),
-//       });
-
-//       const data = await res.json();
-//       if (data?.url) {
-//         window.location.href = data.url;
-//       }
-//     } catch (err) {
-//       console.error("Checkout error:", err);
-//     }
-//   }
-
-//   const listToShow = results ?? messages;
-
-//   return (
-//     <main className="min-h-screen bg-neutral-950 text-neutral-100 px-6 py-12">
-//       <div className="max-w-3xl mx-auto">
-//         <h1 className="text-xl font-semibold mb-4">
-//           Search conversation
-//         </h1>
-
-//         {!paid && (
-//           <div className="mb-4 rounded-md border border-neutral-800 bg-neutral-900 p-4 text-sm text-neutral-300">
-//             🔒 Search is locked. Upload is free — unlock full search for $9.
-//           </div>
-//         )}
-
-//         <input
-//           value={query}
-//           onChange={(e) => setQuery(e.target.value)}
-//           placeholder="Search messages…"
-//           className="w-full mb-3 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-800"
-//         />
-
-//         <button
-//           onClick={handleSearch}
-//           className="mb-6 rounded-md bg-white px-4 py-2 text-black"
-//         >
-//           {loading ? "Searching…" : "Search"}
-//         </button>
-
-//         {showPaywall && !paid && (
-//           <div className="mb-6 rounded-md border border-neutral-800 bg-neutral-900 p-6 text-center">
-//             <p className="mb-4 text-sm text-neutral-300">
-//               Unlock full search to filter messages by keyword,
-//               emotion, or sender.
-//             </p>
-
-//             <button
-//               onClick={handleUnlock}
-//               className="rounded-md bg-white px-6 py-2 text-sm font-medium text-black"
-//             >
-//               🔓 Unlock full search — $9
-//             </button>
-//           </div>
-//         )}
-
-//         <div className="space-y-4">
-//           {listToShow.map((msg) => (
-//             <div
-//               key={msg.id}
-//               className="rounded-md border border-neutral-800 bg-neutral-900 p-3"
-//             >
-//               <div className="text-xs text-neutral-400 mb-1">
-//                 {msg.sender} · {formatTimestamp(msg.timestamp)}
-//               </div>
-//               <div>{msg.text}</div>
-//             </div>
-//           ))}
-
-//           {results && results.length === 0 && (
-//             <div className="text-sm text-neutral-400">
-//               No messages matched your query.
-//             </div>
-//           )}
-//         </div>
-//       </div>
-//     </main>
-//   );
-// }
-
 "use client";
 
 import { useState } from "react";
@@ -161,119 +15,147 @@ interface Props {
   messages: Message[];
 }
 
-function formatTimestamp(ts: string) {
-  const d = new Date(ts);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-
-  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
-}
-
-export default function SearchClient({
-  uploadId,
-  paid,
-  messages,
-}: Props) {
+export default function SearchClient({ uploadId, paid, messages }: Props) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Message[] | null>(null);
+  const [results, setResults] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  async function handleSearch() {
-    if (!query || !paid) return;
+  async function runSearch() {
+    if (!query.trim()) {
+      setResults([]);
+      setHasSearched(false);
+      return;
+    }
 
     setLoading(true);
+    setHasSearched(true);
 
-    const res = await fetch("/api/query", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uploadId, query }),
-    });
-
-    const data = await res.json();
-    setResults(data.results || []);
-    setLoading(false);
-  }
-
-  async function handleUnlock() {
     try {
-      const res = await fetch("/api/stripe/checkout", {
+      const res = await fetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uploadId }),
+        body: JSON.stringify({ uploadId, query }),
       });
 
       const data = await res.json();
-      if (data?.url) {
-        window.location.href = data.url;
-      }
+      setResults(data.results || []);
     } catch (err) {
-      console.error("Checkout error:", err);
+      console.error(err);
+      setResults([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const listToShow = results ?? messages;
+  async function unlock() {
+    setRedirecting(true);
+    const res = await fetch("/api/stripe/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId }),
+    });
+
+    const data = await res.json();
+    window.location.href = data.url;
+  }
+
+  const previewMessages = messages.slice(0, 5);
+
+  // Decide what messages to show
+  const visibleMessages = paid
+    ? query && hasSearched
+      ? results
+      : messages
+    : previewMessages;
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 px-6 py-12">
+    <main className="min-h-screen bg-black text-white px-6 py-10">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-xl font-semibold mb-4">
-          Search conversation
-        </h1>
 
+        {/* 🔓 PAID SUCCESS */}
+        {paid && (
+          <div className="mb-6 rounded-md border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-400">
+            ✅ Full search unlocked.
+            <div className="text-xs text-green-300 mt-1">
+              ⏳ This conversation will auto-delete in 24 hours.
+            </div>
+          </div>
+        )}
+
+        {/* 🔒 PREVIEW MODE */}
         {!paid && (
-          <div className="mb-6 rounded-md border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-sm text-neutral-300 mb-3">
-              🔒 Search is locked. Upload is free — unlock full search for $9.
+          <div className="mb-6 rounded-md border border-neutral-800 bg-neutral-900 p-4 text-sm text-neutral-300">
+            🔒 <strong>Preview mode</strong>
+            <p className="mt-1 text-neutral-400">
+              Uploading is free. Unlock full emotional & keyword search for{" "}
+              <strong>$9 (one-time)</strong>.
             </p>
 
             <button
-              onClick={handleUnlock}
-              className="rounded-md bg-white px-6 py-2 text-sm font-medium text-black"
+              onClick={unlock}
+              disabled={redirecting}
+              className="mt-4 rounded-md bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
             >
-              🔓 Unlock full search — $9
+              {redirecting ? "Redirecting…" : "Unlock full search"}
             </button>
           </div>
         )}
 
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={
-            paid
-              ? "Search messages…"
-              : "Unlock to search messages…"
-          }
-          disabled={!paid}
-          className="w-full mb-3 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-800 disabled:opacity-50"
-        />
+        {/* SEARCH INPUT */}
+        <div className="flex gap-2 mb-6">
+          <input
+            className="flex-1 rounded-md bg-neutral-900 border border-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500"
+            placeholder={
+              paid
+                ? "Search messages…"
+                : "Unlock full search to query messages"
+            }
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setHasSearched(false); // 🔑 reset search state on typing
+            }}
+            disabled={!paid}
+          />
+          <button
+            onClick={runSearch}
+            disabled={!paid || loading}
+            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
+          >
+            {loading ? "Searching…" : "Search"}
+          </button>
+        </div>
 
-        <button
-          onClick={handleSearch}
-          disabled={!paid || loading}
-          className="mb-6 rounded-md bg-white px-4 py-2 text-black disabled:opacity-50"
-        >
-          {loading ? "Searching…" : "Search"}
-        </button>
-
+        {/* RESULTS / CONVERSATION */}
         <div className="space-y-4">
-          {listToShow.map((msg) => (
+          {visibleMessages.map((msg) => (
             <div
               key={msg.id}
               className="rounded-md border border-neutral-800 bg-neutral-900 p-3"
             >
               <div className="text-xs text-neutral-400 mb-1">
-                {msg.sender} · {formatTimestamp(msg.timestamp)}
+                {msg.sender} ·{" "}
+                {new Date(msg.timestamp)
+                  .toISOString()
+                  .replace("T", " ")
+                  .slice(0, 16)}
               </div>
-              <div>{msg.text}</div>
+              <div className="text-sm text-neutral-200">{msg.text}</div>
             </div>
           ))}
 
-          {results && results.length === 0 && (
-            <div className="text-sm text-neutral-400">
-              No messages matched your query.
+          {!paid && (
+            <div className="text-sm text-neutral-500 italic">
+              Showing preview messages. Unlock to view and search the full conversation.
+            </div>
+          )}
+
+          {/* ✅ ONLY show after an actual search */}
+          {paid && hasSearched && !loading && results.length === 0 && (
+            <div className="text-sm text-neutral-500">
+              No messages matched your search.
             </div>
           )}
         </div>
