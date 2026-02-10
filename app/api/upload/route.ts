@@ -1,107 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase";
 
-const supabaseAdmin = getSupabaseAdmin();
-
-import { extractTags } from "@/lib/nlp/rules";
-
-function toISODate(
-  day: number,
-  month: number,
-  year: number,
-  hour: number,
-  minute: number
-) {
-  // JS months are 0-based
-  return new Date(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute
-  ).toISOString();
-}
-
+/**
+ * Parse a single WhatsApp chat line.
+ * Supports:
+ * 14/01/24, 6:20 PM - Alex: hello
+ * [14/01/24, 18:20] Alex: hello
+ */
 function parseWhatsAppLine(line: string) {
-  // FORMAT A:
-  // 14/01/24, 6:20 PM - Alex: message
-  const formatA = line.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),\s(\d{1,2}):(\d{2})\s?(AM|PM)\s-\s([^:]+):\s(.*)$/i
+  const formatA =
+    /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s(\d{1,2}:\d{2}(?:\s?[APMapm]{2})?)\s-\s([^:]+):\s(.+)$/;
+
+  const formatB =
+    /^\[(\d{1,2}\/\d{1,2}\/\d{2,4}),\s(\d{1,2}:\d{2})\]\s([^:]+):\s(.+)$/;
+
+  const match = line.match(formatA) || line.match(formatB);
+  if (!match) return null;
+
+  const [, date, time, sender, message] = match;
+
+  const [day, month, yearRaw] = date.split("/").map(Number);
+  const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
+
+  const timestamp = new Date(
+    `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${time}`
   );
 
-  if (formatA) {
-    const [
-      ,
-      day,
-      month,
-      yearRaw,
-      hourRaw,
-      minute,
-      meridiem,
-      sender,
-      message,
-    ] = formatA;
+  if (isNaN(timestamp.getTime())) return null;
 
-    let year = Number(yearRaw);
-    if (year < 100) year += 2000;
-
-    let hour = Number(hourRaw);
-    if (meridiem.toUpperCase() === "PM" && hour < 12)
-      hour += 12;
-    if (meridiem.toUpperCase() === "AM" && hour === 12)
-      hour = 0;
-
-    return {
-      timestamp: toISODate(
-        Number(day),
-        Number(month),
-        year,
-        hour,
-        Number(minute)
-      ),
-      sender,
-      message,
-    };
-  }
-
-  // FORMAT B:
-  // [10/01/2024, 10:30] Alex: message
-  const formatB = line.match(
-    /^\[(\d{1,2})\/(\d{1,2})\/(\d{4}),\s(\d{1,2}):(\d{2})\]\s([^:]+):\s(.*)$/
-  );
-
-  if (formatB) {
-    const [
-      ,
-      day,
-      month,
-      year,
-      hour,
-      minute,
-      sender,
-      message,
-    ] = formatB;
-
-    return {
-      timestamp: toISODate(
-        Number(day),
-        Number(month),
-        Number(year),
-        Number(hour),
-        Number(minute)
-      ),
-      sender,
-      message,
-    };
-  }
-
-  return null;
+  return {
+    sender: sender.trim(),
+    text: message.trim(),
+    timestamp: timestamp.toISOString(),
+    tags: [],
+  };
 }
 
 export async function POST(req: NextRequest) {
-  
   try {
-    
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -112,44 +47,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const text = await file.text();
-    const lines = text.split("\n");
+    const rawText = await file.text();
+    const lines = rawText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
 
+    const parsedMessages = lines
+      .map(parseWhatsAppLine)
+      .filter(Boolean) as {
+      sender: string;
+      text: string;
+      timestamp: string;
+      tags: string[];
+    }[];
+
+    if (parsedMessages.length === 0) {
+      return NextResponse.json(
+        { error: "No valid WhatsApp messages found" },
+        { status: 400 }
+      );
+    }
+
+    // 🔐 Runtime-only Supabase import (CRITICAL FOR VERCEL)
+    const { getSupabaseAdmin } = await import("@/lib/supabase");
+    const supabase = getSupabaseAdmin();
+
+    // ✅ No uuid dependency
     const uploadId = crypto.randomUUID();
     const expiresAt = new Date(
       Date.now() + 24 * 60 * 60 * 1000
     ).toISOString();
 
-    const messages = lines
-      .map((line) => {
-        const parsed = parseWhatsAppLine(line.trim());
-        if (!parsed) return null;
-
-        return {
-          upload_id: uploadId,
-          sender: parsed.sender,
-          text: parsed.message,
-          timestamp: parsed.timestamp,
-          tags: extractTags(parsed.message),
-        };
-      })
-      .filter(
-        (m): m is {
-          upload_id: string;
-          sender: string;
-          text: string;
-          timestamp: string;
-          tags: string[];
-        } => Boolean(m)
-      );
-
-    const { error: uploadError } = await supabaseAdmin
+    const { error: uploadError } = await supabase
       .from("uploads")
       .insert({
         id: uploadId,
         paid: false,
         expires_at: expiresAt,
-        total_messages: messages.length,
+        total_messages: parsedMessages.length,
       });
 
     if (uploadError) {
@@ -160,24 +96,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (messages.length > 0) {
-      const { error: messageError } = await supabaseAdmin
-        .from("messages")
-        .insert(messages);
+    const messagesToInsert = parsedMessages.map((msg) => ({
+      upload_id: uploadId,
+      sender: msg.sender,
+      text: msg.text,
+      timestamp: msg.timestamp,
+      tags: msg.tags,
+    }));
 
-      if (messageError) {
-        console.error(
-          "MESSAGE INSERT FAILED:",
-          messageError
-        );
-      }
+    const { error: messageError } = await supabase
+      .from("messages")
+      .insert(messagesToInsert);
+
+    if (messageError) {
+      console.error("MESSAGE INSERT FAILED:", messageError);
+      return NextResponse.json(
+        { error: "Failed to save messages" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ uploadId });
   } catch (err) {
-    console.error("UPLOAD ROUTE CRASH:", err);
+    console.error("UPLOAD ROUTE ERROR:", err);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Upload failed" },
       { status: 500 }
     );
   }
