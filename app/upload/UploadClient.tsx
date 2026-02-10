@@ -23,10 +23,12 @@ export default function UploadClient() {
 
     const data = await res.json();
 
+    console.log("UPLOAD RESPONSE:", data);
+
     if (data.uploadId) {
       router.push(`/analyze?uploadId=${data.uploadId}`);
     } else {
-      alert("Upload failed. Please try again.");
+      alert("Upload failed — no uploadId returned");
       setLoading(false);
     }
   }
@@ -39,8 +41,8 @@ export default function UploadClient() {
         </h1>
 
         <p className="text-sm text-neutral-400 mb-6">
-          Upload a Transcript or WhatsApp chat export (.txt). Your data is
-          automatically deleted after 24 hours.
+          Upload a WhatsApp chat export (.txt). Files are
+          deleted after 24 hours.
         </p>
 
         <label className="block w-full cursor-pointer rounded-md border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm text-neutral-300 hover:bg-neutral-800 mb-4">

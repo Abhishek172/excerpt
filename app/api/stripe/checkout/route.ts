@@ -1,47 +1,47 @@
-import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-01-28.clover",
 });
 
 export async function POST(req: NextRequest) {
-  const { uploadId } = await req.json();
+  try {
+    const { uploadId } = await req.json();
 
-  console.log("BASE URL:", process.env.NEXT_PUBLIC_BASE_URL);
+    if (!uploadId) {
+      return NextResponse.json(
+        { error: "Missing uploadId" },
+        { status: 400 }
+      );
+    }
 
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Excerpt — Full Search Unlock",
+            },
+            unit_amount: 900,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/analyze?uploadId=${uploadId}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/analyze?uploadId=${uploadId}`,
+      metadata: { uploadId },
+    });
 
-  if (!uploadId) {
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    console.error("STRIPE CHECKOUT ERROR:", err);
     return NextResponse.json(
-      { error: "Missing uploadId" },
-      { status: 400 }
+      { error: "Stripe checkout failed" },
+      { status: 500 }
     );
   }
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "Unlock conversation search",
-            description:
-              "Unlimited search and filters for this uploaded conversation.",
-          },
-          unit_amount: 900, // $9.00
-        },
-        quantity: 1,
-      },
-    ],
-    metadata: {
-      uploadId,
-    },
-    success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/analyze?uploadId=${uploadId}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/analyze?uploadId=${uploadId}`,
-  });
-
-  return NextResponse.json({ url: session.url });
-  console.log("BASE URL:", process.env.NEXT_PUBLIC_BASE_URL);
-
 }

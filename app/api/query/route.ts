@@ -1,53 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-//import { supabase } from "@/lib/supabase";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
+interface Message {
+  text: string;
+  tags?: string[];
+}
 
 export async function POST(req: NextRequest) {
-  const { uploadId, query } = (await req.json()) as {
-    uploadId?: string;
-    query?: string;
-  };
-
+  const { uploadId, query } = await req.json();
   if (!uploadId || !query) {
-    return NextResponse.json(
-      { error: "Missing parameters" },
-      { status: 400 }
-    );
+    return NextResponse.json({ results: [] });
   }
 
-  const keywords: string[] = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const supabase = getSupabaseAdmin();
 
-  const { data, error } = await supabaseAdmin
+  const { data } = await supabase
     .from("messages")
-    .select("*")
+    .select("text, tags, sender, timestamp, id")
     .eq("upload_id", uploadId);
 
-  if (error || !data) {
-    return NextResponse.json(
-      { error: error?.message || "Query failed" },
-      { status: 500 }
+  const q = query.toLowerCase();
+
+  const results = (data || []).filter((msg: Message) => {
+    return (
+      msg.text.toLowerCase().includes(q) ||
+      (Array.isArray(msg.tags) && msg.tags.includes(q))
     );
-  }
-
-  const results = data.filter((msg) => {
-    const text = msg.text.toLowerCase();
-    const tags: string[] = Array.isArray(msg.tags)
-      ? msg.tags
-      : [];
-
-    const keywordMatch = keywords.some(
-      (k: string) => text.includes(k)
-    );
-
-    const tagMatch = keywords.some(
-      (k: string) => tags.includes(k)
-    );
-
-    return keywordMatch || tagMatch;
   });
 
   return NextResponse.json({ results });

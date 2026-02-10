@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
+
+const supabaseAdmin = getSupabaseAdmin();
+
 import { extractTags } from "@/lib/nlp/rules";
 
 function toISODate(
@@ -96,7 +99,9 @@ function parseWhatsAppLine(line: string) {
 }
 
 export async function POST(req: NextRequest) {
+  
   try {
+    
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 

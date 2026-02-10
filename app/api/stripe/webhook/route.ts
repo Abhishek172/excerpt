@@ -1,7 +1,10 @@
 import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
-//import { supabase } from "@/lib/supabase";
-import { supabaseAdmin } from "@/lib/supabase";
+// //import { supabase } from "@/lib/supabase";
+
+import { getSupabaseAdmin } from "@/lib/supabase";
+
+const supabaseAdmin = getSupabaseAdmin();
 
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     await supabaseAdmin
       .from("uploads")
-      .update({ paid: true })
+      .update({ paid: true }as any)
       .eq("id", uploadId);
   }
 
