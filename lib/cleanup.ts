@@ -1,7 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export async function cleanupExpiredUploads() {
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("uploads")
     .delete()
     .lt("expires_at", new Date().toISOString());
