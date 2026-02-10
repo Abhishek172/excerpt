@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-01-28.clover",
-});
-
 export async function POST(req: NextRequest) {
   try {
     const { uploadId } = await req.json();
@@ -14,6 +10,15 @@ export async function POST(req: NextRequest) {
         { error: "Missing uploadId" },
         { status: 400 }
       );
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2026-01-28.clover",
+    });
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+    if (!baseUrl) {
+      throw new Error("NEXT_PUBLIC_BASE_URL not set");
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -31,14 +36,14 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/analyze?uploadId=${uploadId}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/analyze?uploadId=${uploadId}`,
+      success_url: `${baseUrl}/analyze?uploadId=${uploadId}`,
+      cancel_url: `${baseUrl}/analyze?uploadId=${uploadId}`,
       metadata: { uploadId },
     });
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    console.error("STRIPE CHECKOUT ERROR:", err);
+    console.error("Stripe checkout error:", err);
     return NextResponse.json(
       { error: "Stripe checkout failed" },
       { status: 500 }
